@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Running Analysis - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h1>Analysis in Progress</h1>
+      <p class="muted">Job ID: <code>{{ job_id }}</code> &bull; Started at: {{ job.created }} &bull; Scope: <strong>{{ scope_text }}</strong></p>
+    </div>
+    <div>
+      <span class="pill warn" style="font-size:13px;padding:6px 14px;">⚡ Computing...</span>
+    </div>
+  </div>
+
+  <!-- Step Tracker -->
+  <div class="steps-container">
+    <div class="step-item active" id="step-ingest">
+      <div class="step-circle">1</div>
+      <div class="step-label">Ingest & Store</div>
+    </div>
+    <div class="step-item" id="step-checks">
+      <div class="step-circle">2</div>
+      <div class="step-label">Data Checks</div>
+    </div>
+    <div class="step-item" id="step-breakdown">
+      <div class="step-circle">3</div>
+      <div class="step-label">Breakdown Check</div>
+    </div>
+    <div class="step-item" id="step-topology">
+      <div class="step-circle">4</div>
+      <div class="step-label">Topology Scoring</div>
+    </div>
+    <div class="step-item" id="step-reports">
+      <div class="step-circle">5</div>
+      <div class="step-label">Reports & Workbooks</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:20px;">Execution Log Stream</h3>
+  <div class="log-box" id="logBox">
+{% for line in job.log %}{{ line }}
+{% endfor %}</div>
+
+  <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;">
+    <span class="muted">Live log updates every 1.8 seconds. Page will automatically advance upon completion.</span>
+    <a href="{{ url_for('history') }}" class="btn secondary">View Past Runs</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    startJobPolling("{{ url_for('status', job_id=job_id) }}");
+  });
+</script>
+{% endblock %}

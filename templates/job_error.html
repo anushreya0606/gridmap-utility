@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Error - GridMap{% endblock %}
+
+{% block content %}
+<div class="card" style="border-left: 4px solid var(--bad-fg);">
+  <div class="card-header">
+    <div>
+      <h1 style="color:var(--bad-fg);">Analysis Could Not Complete</h1>
+      <p class="muted">Run created: {{ job.created }} &bull; Job ID: <code>{{ job_id }}</code></p>
+    </div>
+    <span class="pill bad">Failed</span>
+  </div>
+
+  <div style="background:var(--bad-bg);color:var(--bad-fg);border:1px solid var(--bad-border);border-radius:var(--radius-md);padding:16px;margin:16px 0;font-weight:600;">
+    {{ job.error }}
+  </div>
+
+  <h3>Execution Log Prior to Error</h3>
+  <div class="log-box">
+{% for line in job.log %}{{ line }}
+{% endfor %}</div>
+
+  {% if job.trace %}
+  <details style="margin-top:16px;">
+    <summary>Technical Stack Trace</summary>
+    <div class="log-box" style="margin-top:10px;">{{ job.trace }}</div>
+  </details>
+  {% endif %}
+
+  <div style="margin-top:24px;display:flex;gap:12px;">
+    <a href="{{ url_for('index') }}" class="btn">Try New Run</a>
+    <a href="{{ url_for('history') }}" class="btn secondary">Back to Past Runs</a>
+  </div>
+</div>
+{% endblock %}

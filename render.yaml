@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: gridmap-utility
+    env: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: GRIDMAP_PUBLIC
+        value: "1"
+      - key: GRIDMAP_KEEP_DAYS
+        value: "7"
+      - key: PORT
+        value: "10000"

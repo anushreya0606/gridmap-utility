@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Feeder–DTR–Consumer Mapping Check{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+    // Immediate theme execution to prevent screen flicker
+    (function() {
+      var t = localStorage.getItem('theme');
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-icon">⚡</span>
+      <span>GridMap Utility</span>
+    </a>
+    <nav>
+      <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">New Run</a>
+      <a href="{{ url_for('history') }}" class="{% if request.endpoint == 'history' %}active{% endif %}">Past Runs</a>
+      <a href="{{ url_for('stored') }}" class="{% if request.endpoint == 'stored' %}active{% endif %}">Stored Events</a>
+      <a href="{{ url_for('method') }}" class="{% if request.endpoint == 'method' %}active{% endif %}">Rules & Method</a>
+    </nav>
+    <div class="header-right">
+      <button class="theme-toggle" id="themeBtn" onclick="cycleTheme()" title="Switch Light / Dark / Auto">
+        🖥 Auto
+      </button>
+    </div>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    Electricity Distribution Network Verification &bull; Outage Timing Topology Analysis &bull; Private & Unbiased
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Past Runs - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h1>Past Analysis Runs</h1>
+      <p class="muted">Every analysis run is preserved locally with its results and downloadable Excel workbooks, surviving application restarts.</p>
+    </div>
+    <div>
+      <a href="{{ url_for('index') }}" class="btn">⚡ Start New Run</a>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Run Timestamp</th>
+          <th>Status</th>
+          <th>Scope</th>
+          <th>Outage Period</th>
+          <th>Feeder Breakdowns</th>
+          <th>Feeder&rarr;Consumer Match %</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td>
+            <a href="{{ url_for('job', job_id=r.id) }}" style="font-weight:600;">
+              {{ r.created }}
+            </a>
+          </td>
+          <td>
+            <span class="pill {{ r.status_cls }}">{{ r.state }}</span>
+          </td>
+          <td>{{ r.scope }}</td>
+          <td>{{ r.period or '—' }}</td>
+          <td>{{ r.breakdowns if r.breakdowns is not none else '—' }}</td>
+          <td>{{ r.match_pct or '—' }}</td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex;gap:8px;">
+              <a href="{{ url_for('job', job_id=r.id) }}" class="btn secondary" style="padding:4px 10px;font-size:12px;">View</a>
+              <form method="post" action="{{ url_for('delete_job', job_id=r.id) }}" onsubmit="return confirm('Delete run {{ r.created }} and its generated Excel reports?')">
+                <button type="submit" class="btn danger" style="padding:4px 10px;font-size:12px;">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="muted" style="text-align:center;padding:24px;">No analysis runs found yet. Click "Start New Run" above to begin.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

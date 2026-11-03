@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - GridMap{% endblock %}
+
+{% block content %}
+<!-- Top Header & Actions -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h1>Outage Mapping Analysis Results</h1>
+      <p class="muted">Run completed: <strong>{{ job.created }}</strong> &bull; Events analysed: <strong>{{ scope_text }}</strong> &bull; Files: {{ job.files|join(' · ') }}</p>
+      {% if job.added %}
+      <p class="muted">New events stored: {% for k, v in job.added.items() %}<span class="pill info" style="margin-right:4px;">{{ k }}: {{ "{:,}".format(v) }}</span>{% endfor %}</p>
+      {% endif %}
+    </div>
+    <div style="text-align:right;">
+      <a href="{{ url_for('index') }}" class="btn secondary">⚡ New Run</a>
+    </div>
+  </div>
+
+  <!-- Download Bar: 4 Excel Buttons -->
+  <div class="download-bar">
+    <div class="download-bar-title">
+      <span>📥 Download Excel Reports:</span>
+    </div>
+    <a href="{{ url_for('download', job_id=job_id, name='All_Results.xlsx') }}" class="btn" style="background:#047857;font-weight:700;">
+      📊 All_Results.xlsx (Combined Master)
+    </a>
+    <a href="{{ url_for('download', job_id=job_id, name='Breakdown_Mapping_Check.xlsx') }}" class="btn ghost">
+      ⚡ Breakdown_Mapping_Check.xlsx
+    </a>
+    <a href="{{ url_for('download', job_id=job_id, name='Mapping_Report.xlsx') }}" class="btn ghost">
+      📋 Mapping_Report.xlsx
+    </a>
+    <a href="{{ url_for('download', job_id=job_id, name='Feeder_DTR_Consumer.xlsx') }}" class="btn ghost">
+      🌳 Feeder_DTR_Consumer.xlsx
+    </a>
+  </div>
+
+  <div class="muted" style="font-size:12px;">
+    Applied Rules: Timing tolerance: <strong>&plusmn;{{ job.settings.tol }} min</strong> &bull; Suspect breakdown below: <strong>{{ job.settings.suspect_pct }}%</strong> &bull; Max events/day: <strong>{{ job.settings.max_events }}</strong> &bull; Alt source recall: <strong>&ge;{{ job.settings.min_alt_recall }}%</strong> &bull; Rec source recall: <strong>&le;{{ job.settings.max_rec_recall }}%</strong>
+  </div>
+</div>
+
+<!-- CLIENT HEADLINE NUMBERS (TOP KPI DECK) -->
+<div class="grid-kpi">
+  <div class="kbox highlight">
+    <div class="label">Feeder Breakdowns</div>
+    <div class="kpi">{{ breakdown.n }}</div>
+    <div class="sub">
+      <span class="pill ok">{{ breakdown_status_counts.get('Confirmed', 0) }} Confirmed</span>
+      <span class="pill bad">{{ breakdown_status_counts.get('SUSPECT BREAKDOWN', 0) }} Suspect</span>
+    </div>
+  </div>
+
+  <div class="kbox ok">
+    <div class="label">Feeder &rarr; DTR Match</div>
+    <div class="kpi">
+      {% if conf_fd_dt_pct is not none %}{{ "%.1f"|format(conf_fd_dt_pct * 100) }}%{% else %}N/A{% endif %}
+    </div>
+    <div class="sub">Confirmed: {{ conf_fd_dt_m }} match / {{ conf_fd_dt_mm }} mismatch (All: {{ all_fd_dt_m }}/{{ all_fd_dt_mm }})</div>
+  </div>
+
+  <div class="kbox ok">
+    <div class="label">Feeder &rarr; Consumer Match</div>
+    <div class="kpi">
+      {% if conf_fd_c_pct is not none %}{{ "%.1f"|format(conf_fd_c_pct * 100) }}%{% else %}N/A{% endif %}
+    </div>
+    <div class="sub">Confirmed: {{ "{:,}".format(conf_fd_c_m) }} match / {{ "{:,}".format(conf_fd_c_mm) }} mismatch (All: {{ "{:,}".format(all_fd_c_m) }}/{{ "{:,}".format(all_fd_c_mm) }})</div>
+  </div>
+
+  <div class="kbox ok">
+    <div class="label">DTR &rarr; Consumer Match</div>
+    <div class="kpi">
+      {% if conf_dt_c_pct is not none %}{{ "%.1f"|format(conf_dt_c_pct * 100) }}%{% else %}N/A{% endif %}
+    </div>
+    <div class="sub">Confirmed: {{ "{:,}".format(conf_dt_c_m) }} match / {{ "{:,}".format(conf_dt_c_mm) }} mismatch (All: {{ "{:,}".format(all_dt_c_m) }}/{{ "{:,}".format(all_dt_c_mm) }})</div>
+  </div>
+
+  <div class="kbox highlight">
+    <div class="label">DTR &rarr; Feeder Verdict</div>
+    <div class="kpi">
+      {% if judged_dtrs > 0 %}{{ "%.1f"|format((mapping.summary.dtr_correct / judged_dtrs) * 100) }}%{% else %}N/A{% endif %}
+    </div>
+    <div class="sub">{{ mapping.summary.dtr_correct }} of {{ judged_dtrs }} evaluable DTRs correct (Total: {{ "{:,}".format(mapping.summary.dtr_total) }})</div>
+  </div>
+
+  <div class="kbox warn">
+    <div class="label">Flagged Consumers</div>
+    <div class="kpi">{{ "{:,}".format(mapping.summary.flagged_consumers) }}</div>
+    <div class="sub">
+      <span class="pill bad">High: {{ "{:,}".format(mapping.summary.flagged_high) }}</span>
+      <span class="pill warn">Med: {{ "{:,}".format(mapping.summary.flagged_medium) }}</span>
+      <span class="pill info">Low: {{ "{:,}".format(mapping.summary.flagged_low) }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 1: BREAKDOWN MAPPING CHECK (CLIENT'S CORE CHECK) -->
+<div class="card">
+  <h2>1. Match / Mismatch Within Feeder Breakdown Window</h2>
+  <p class="muted">
+    Every feeder breakdown (meter off &rarr; on) is evaluated against the recorded MI mapping. An element counts as <strong>MATCH</strong> if its outage began within &plusmn;{{ job.settings.tol }} minutes of the breakdown window. Elements with missing meters or no outage data that day are counted separately and never treated as mismatches.
+  </p>
+
+  <h3>A. All Breakdowns (Total: {{ breakdown.n }})</h3>
+  <div class="table-container">
+    {{ table_html_main|safe }}
+  </div>
+
+  <h3 style="margin-top:24px;">B. Confirmed Breakdowns Only (Excluding Suspect Breakdowns)</h3>
+  <div class="table-container">
+    {{ table_html_conf|safe }}
+  </div>
+  <p class="muted" style="margin-top:8px;">
+    A breakdown is classified as <strong>SUSPECT</strong> if fewer than {{ job.settings.suspect_pct }}% of the feeder's own consumers went off during that window (e.g. meter on a different feeder or an isolated meter anomaly).
+  </p>
+</div>
+
+<!-- SECTION 2: PER-FEEDER SUMMARY & INTERACTIVE CHARTS -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2>2. Per-Feeder Summary: DTRs & Consumers Match / Mismatch</h2>
+      <p class="muted">
+        Breakdown of each feeder's network mapping: <em>"This feeder has X DTRs (Y match, Z mismatch) and A consumers (B match, C mismatch)"</em>. Click any Feeder Code to view detailed DTR-level breakdown.
+      </p>
+    </div>
+    <div>
+      <input type="text" class="input-search" placeholder="Search feeder name or code..." oninput="filterTable(this, 'feederSummaryTable')">
+    </div>
+  </div>
+
+  <!-- SVG Match vs Mismatch Chart -->
+  {% if chart_feeders %}
+  <div class="chart-card">
+    <h3 style="margin-top:0;">Feeder Breakdown Match vs. Mismatch Comparison</h3>
+    <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12.5px;">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#10b981;border-radius:2px;margin-right:4px;"></span> Consumer MATCH</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:2px;margin-right:4px;"></span> Consumer MISMATCH</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:2px;margin-right:4px;"></span> Consumer PARTIAL</span>
+    </div>
+    <div class="chart-wrapper">
+      <svg class="svg-chart" viewBox="0 0 1000 {{ chart_height }}" preserveAspectRatio="xMidYMid meet">
+        <!-- Grid lines -->
+        {% for y in chart_grid_y %}
+        <line x1="160" y1="{{ y.pos }}" x2="980" y2="{{ y.pos }}" class="chart-grid"></line>
+        <text x="150" y="{{ y.pos + 4 }}" text-anchor="end" class="chart-axis-text">{{ y.val }}</text>
+        {% endfor %}
+
+        <!-- Bars per feeder -->
+        {% for b in chart_feeders %}
+        <text x="150" y="{{ b.y + 12 }}" text-anchor="end" class="chart-axis-text" font-weight="600">{{ b.code }}</text>
+        <!-- Stacked/Grouped Bars -->
+        <rect x="160" y="{{ b.y }}" width="{{ b.m_w }}" height="8" class="chart-bar-match" rx="2">
+          <title>{{ b.name }}: {{ b.match }} MATCH</title>
+        </rect>
+        <rect x="{{ 160 + b.m_w }}" y="{{ b.y }}" width="{{ b.mm_w }}" height="8" class="chart-bar-mismatch" rx="2">
+          <title>{{ b.name }}: {{ b.mismatch }} MISMATCH</title>
+        </rect>
+        <rect x="{{ 160 + b.m_w + b.mm_w }}" y="{{ b.y }}" width="{{ b.p_w }}" height="8" class="chart-bar-partial" rx="2">
+          <title>{{ b.name }}: {{ b.partial }} PARTIAL</title>
+        </rect>
+        {% endfor %}
+      </svg>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="table-container" id="feederSummaryTable">
+    {{ table_html_feeders|safe }}
+  </div>
+</div>
+
+<!-- SECTION 3: DTR -> FEEDER VERDICT -->
+<div class="card">
+  <h2>3. Is Each DTR on the Right Feeder?</h2>
+  <p class="muted">
+    Independent verification combining DTR meter event timing and consumer cluster voting across all {{ "{:,}".format(mapping.summary.dtr_total) }} DTRs in the circle.
+  </p>
+
+  <div class="grid-kpi" style="margin-bottom:16px;">
+    <div class="kbox ok"><div class="label">Correct Feeder</div><div class="kpi">{{ "{:,}".format(mapping.summary.dtr_correct) }}</div></div>
+    <div class="kbox bad"><div class="label">Wrong Feeder</div><div class="kpi">{{ "{:,}".format(mapping.summary.dtr_wrong) }}</div></div>
+    <div class="kbox warn"><div class="label">Conflicting Evidence</div><div class="kpi">{{ mapping.summary.dtr_conflict }}</div></div>
+    <div class="kbox warn"><div class="label">Feeder-Meter Issue</div><div class="kpi">{{ mapping.summary.dtr_meter_issue }}</div></div>
+    <div class="kbox"><div class="label">Unclear</div><div class="kpi">{{ mapping.summary.dtr_unclear }}</div></div>
+    <div class="kbox"><div class="label">Not Checkable (No Outages)</div><div class="kpi">{{ "{:,}".format(mapping.summary.dtr_not_checkable) }}</div></div>
+  </div>
+
+  <div class="table-container">
+    {{ table_html_dtr_check|safe }}
+  </div>
+</div>
+
+<!-- SECTION 4: FLAGGED CONSUMERS & MISMATCH PATTERNS -->
+<div class="card">
+  <h2>4. Consumers That Look Wrongly Mapped</h2>
+  <p class="muted">
+    Consumers whose outage pattern clearly aligns with another DTR/feeder rather than their recorded one. Names and addresses are never displayed or stored.
+  </p>
+
+  <div class="table-container" style="max-height:260px;margin-bottom:16px;">
+    {{ table_html_cons_tab|safe }}
+  </div>
+
+  <h3>Top Systemic Mismatch Patterns</h3>
+  <p class="muted">When dozens of consumers move together from Recorded Feeder &rarr; Suggested Feeder, this points to record-level swapping rather than single-meter moves.</p>
+  <div class="table-container">
+    {{ table_html_patterns|safe }}
+  </div>
+</div>
+
+<!-- SECTION 5: DATA QUALITY CHECKS -->
+<div class="card">
+  <h2>5. Input Data Quality Checks</h2>
+  <p class="muted">Automated verification of dates, column integrity, duplicate elimination, and MI-to-outage coverage.</p>
+  <div class="table-container">
+    {{ table_html_checks|safe }}
+  </div>
+</div>
+
+<!-- SECTION 6: BREAKDOWN VERIFICATION STATUS -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2>6. Individual Feeder Breakdowns Status</h2>
+      <p class="muted">Every breakdown event with the share of its recorded consumers that confirmed the power outage.</p>
+    </div>
+    <div>
+      <input type="text" class="input-search" placeholder="Search breakdown..." oninput="filterTable(this, 'breakdownTable')">
+    </div>
+  </div>
+  <div class="table-container" id="breakdownTable">
+    {{ table_html_status|safe }}
+  </div>
+</div>
+{% endblock %}

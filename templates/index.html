@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}New Analysis Run - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h1>New Analysis Run</h1>
+      <p class="muted">Upload your network MI master and outage reports. File types are automatically recognized from column names. Uploaded events are safely saved to the local store with automatic duplicate suppression.</p>
+    </div>
+  </div>
+
+  <form id="uploadForm" method="post" action="{{ url_for('run') }}" enctype="multipart/form-data">
+    
+    <!-- 1. MI Master Workbook -->
+    <div class="form-group">
+      <label class="form-label">1. MI Master Workbook (.xlsx)</label>
+      <div class="dropzone">
+        <input type="file" name="mi" accept=".xlsx,.xls" {% if not meta %}required{% endif %}>
+        <div class="dropzone-icon">📑</div>
+        <div style="font-weight:600">Drag & drop MI Master Workbook here, or click to browse</div>
+        <div class="form-help">Must contain sheets: <em>Total Consumer MI Data</em>, <em>Total DTR MI</em>, <em>Total Feeder MI</em></div>
+        <div class="file-list"></div>
+      </div>
+      {% if meta %}
+      <div class="pill info" style="margin-top: 8px;">
+        ℹ Stored MI available: <strong>{{ meta['name'] }}</strong> (uploaded {{ meta['uploaded'] }}). Leave empty to reuse.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 2. Outage Reports -->
+    <div class="form-group">
+      <label class="form-label">2. Outage Reports: Consumer, DTR, and Feeder (.csv, .xlsx)</label>
+      <div class="dropzone">
+        <input type="file" name="data" accept=".csv,.xlsx,.xls" multiple>
+        <div class="dropzone-icon">📊</div>
+        <div style="font-weight:600">Drag & drop all outage reports here (select all at once)</div>
+        <div class="form-help">Select Consumer CSV (up to 100+ MB), DTR Excel, and Feeder Excel. Auto-detected from columns.</div>
+        <div class="file-list"></div>
+      </div>
+      <div class="form-help">Leave empty if you only wish to re-analyse existing stored events.</div>
+    </div>
+
+    <!-- 3. Scope Selection -->
+    <div class="form-group">
+      <label class="form-label">3. Outage Events Scope</label>
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="scope" value="upload" checked>
+          <span><strong>Only the files uploaded now</strong> (single day / upload batch)</span>
+        </label>
+        <label>
+          <input type="radio" name="scope" value="all">
+          <span><strong>All stored events</strong>, past and new ({{ store_note }})</span>
+        </label>
+        <label>
+          <input type="radio" name="scope" value="days">
+          <span>Stored events from the last <input type="number" name="days" value="7" min="1" style="width:75px;display:inline-block;margin:0 4px;"> days</span>
+        </label>
+        <label>
+          <input type="radio" name="scope" value="range">
+          <span>Stored events between <input type="date" name="date_from" style="display:inline-block;margin:0 4px;"> and <input type="date" name="date_to" style="display:inline-block;margin:0 4px;"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 4. Collapsible Thresholds -->
+    <details>
+      <summary>⚙ Advanced Matching Rules & Thresholds (Applied consistently across all feeders)</summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:12px;">
+        {% for k, lab, d, typ, h in settings %}
+        <div>
+          <label style="display:block;font-weight:600;font-size:13px;margin-bottom:4px;">{{ lab }}</label>
+          <input type="number" step="any" name="{{ k }}" value="{{ d }}" style="width:100%;">
+          <div class="form-help">{{ h }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+
+    <!-- Upload Progress Bar -->
+    <div id="uploadProgress" class="progress-container">
+      <div class="progress-info">
+        <span id="progressStatus">Uploading files...</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Submit Action -->
+    <div style="margin-top:24px;">
+      <button type="submit" id="submitBtn" class="btn btn-lg">
+        ⚡ Run All Checks
+      </button>
+      <span class="muted" style="margin-left:14px;">Large CSV files (60+ MB) may take 10–60 seconds to upload and 1–3 minutes to compute.</span>
+    </div>
+
+  </form>
+</div>
+
+{% if is_public %}
+<div class="card" style="border-left:4px solid var(--primary);">
+  <h2>🔒 Private Browser Workspace</h2>
+  <p class="muted">
+    There is no login required. This site automatically assigns a private workspace to <strong>your browser session</strong> using an encrypted cookie. Other visitors can never see your uploads, runs, or stored events. Inactive workspaces are automatically purged after {{ keep_days }} days of inactivity. Remember to download your Excel workbooks for long-term record-keeping.
+  </p>
+</div>
+{% endif %}
+{% endblock %}

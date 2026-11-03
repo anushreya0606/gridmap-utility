@@ -1,0 +1,12 @@
+# Ignore large dataset and local runtime files
+data/
+*.xlsx
+*.csv
+jobs/
+store/
+workspaces/
+cloudflared.exe
+.secret_key
+__pycache__/
+*.tmp.*
+.pytest_cache/

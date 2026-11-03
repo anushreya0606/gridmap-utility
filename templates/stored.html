@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Stored Events - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h1>Stored Outage Events Repository</h1>
+      <p class="muted">
+        Every uploaded outage report is automatically indexed in the local SQLite store. Identical events (same meter and start time) are deduplicated, ensuring safe repeated uploads.
+      </p>
+    </div>
+    <div>
+      <a href="{{ url_for('index') }}" class="btn">⚡ Run Analysis on Stored Data</a>
+    </div>
+  </div>
+
+  {% if msg %}
+  <div class="pill ok" style="display:block;margin-bottom:16px;padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;">
+    {{ msg }}
+  </div>
+  {% endif %}
+
+  <!-- KPI Grid -->
+  <div class="grid-kpi">
+    <div class="kbox highlight">
+      <div class="label">Days Stored</div>
+      <div class="kpi">{{ days_count }}</div>
+    </div>
+    <div class="kbox">
+      <div class="label">Consumer Events</div>
+      <div class="kpi">{{ "{:,}".format(total_consumer) }}</div>
+    </div>
+    <div class="kbox">
+      <div class="label">DTR Events</div>
+      <div class="kpi">{{ "{:,}".format(total_dtr) }}</div>
+    </div>
+    <div class="kbox">
+      <div class="label">Feeder Events</div>
+      <div class="kpi">{{ "{:,}".format(total_feeder) }}</div>
+    </div>
+  </div>
+
+  <div style="background:var(--bg);border:1px solid var(--card-border);padding:12px 16px;border-radius:var(--radius-sm);margin:16px 0;font-size:13px;">
+    Stored MI Master: 
+    {% if meta %}
+      <strong>{{ meta['name'] }}</strong> <span class="muted">(uploaded {{ meta['uploaded'] }})</span>
+    {% else %}
+      <span class="muted">None stored yet. Upload an MI workbook on the New Run page.</span>
+    {% endif %}
+  </div>
+
+  <h3>Daily Event Counts</h3>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Consumer Outages</th>
+          <th>DTR Outages</th>
+          <th>Feeder Outages</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in daily_rows %}
+        <tr>
+          <td style="font-weight:600;">{{ r.day }}</td>
+          <td>{{ "{:,}".format(r.consumer) }}</td>
+          <td>{{ "{:,}".format(r.dtr) }}</td>
+          <td>{{ "{:,}".format(r.feeder) }}</td>
+          <td style="text-align:right;">
+            <form method="post" action="{{ url_for('stored') }}" onsubmit="return confirm('Delete all outage events for date {{ r.day }}?')" style="display:inline;">
+              <input type="hidden" name="day" value="{{ r.day }}">
+              <button type="submit" class="btn danger" style="padding:3px 10px;font-size:12px;">Delete Day</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="muted" style="text-align:center;padding:24px;">No outage events stored yet. Upload files on the New Run page to populate the store.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if days_count > 0 %}
+  <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--card-border);">
+    <form method="post" action="{{ url_for('stored') }}" onsubmit="return confirm('Are you sure you want to completely erase ALL stored outage events? This cannot be undone.')">
+      <input type="hidden" name="action" value="clear_all">
+      <button type="submit" class="btn danger">
+        🗑 Wipe All Stored Outage Events
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

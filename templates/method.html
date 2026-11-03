@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Rules & Methodology - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1>Rules & Analysis Methodology</h1>
+  <p class="muted">
+    The application applies strictly deterministic, objective mathematical rules based entirely on outage start and restore timestamps. The same principles are applied uniformly across all feeders, DTRs, and circles with zero hardcoded exceptions.
+  </p>
+
+  <h3 style="margin-top:24px;">1. Client Feeder Breakdown Check (Primary Check)</h3>
+  <p>
+    For every feeder breakdown interval (from feeder off-time to on-time):
+  </p>
+  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
+    <li><strong>Feeder &rarr; DTR:</strong> Did each DTR recorded under this feeder go off within the breakdown window (feeder off &minus; tolerance to feeder on &plus; tolerance)?</li>
+    <li><strong>Feeder &rarr; Consumer:</strong> Did each consumer recorded under this feeder experience an outage inside the breakdown window?</li>
+    <li><strong>DTR &rarr; Consumer:</strong> For each DTR whose meter actually tripped during the feeder breakdown, did its connected consumers trip during the DTR's specific outage interval?</li>
+    <li><strong>Absence of Data is NOT Mismatch:</strong> DTRs without physical meters, consumers whose meters sent no telemetry that day, and faulty meters are categorized separately as <em>NO DTR METER</em> or <em>NO METER DATA</em>, never as mismatches.</li>
+    <li><strong>Suspect Breakdowns:</strong> If fewer than 10% of a feeder's recorded consumers experienced an outage, the breakdown record itself is flagged as <em>SUSPECT</em> (e.g. meter assigned to the wrong feeder or an isolated meter power cycle). Results are reported both with and without suspect events.</li>
+  </ul>
+
+  <h3>2. Topology Engine: Wrong Mapping Identification</h3>
+  <p>
+    When a consumer trips repeatedly, its event profile is compared against every feeder and DTR:
+  </p>
+  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
+    <li><strong>Dual-Edge Match:</strong> An outage match requires both <em>Start</em> AND <em>Restore</em> to coincide within &plusmn;2 minutes. Restores distinguish feeders that trip simultaneously due to upstream 33 kV / grid substation events but restore at staggered times.</li>
+    <li><strong>Jaccard Overlap:</strong> The score between consumer \(i\) and candidate source \(s\) is computed as \(J = \frac{m}{n_i + n_s - m}\), where \(m\) is the count of shared events.</li>
+    <li><strong>Virtual DTR Peer Groups:</strong> For DTRs without dedicated smart meters, virtual events are synthesized when &ge;50% (and &ge;3) of the DTR's consumers trip concurrently. A consumer is never counted toward its own group's evidence (leave-one-out validation).</li>
+    <li><strong>Flagging Thresholds:</strong> A consumer is flagged as wrongly mapped only when:
+      <ol style="margin:6px 0 6px 20px;">
+        <li>It follows &ge;60% of the suggested source's outages (\(m \ge 2\)).</li>
+        <li>It follows &le;40% of its recorded source's outages.</li>
+        <li>The Jaccard score margin between suggested and recorded exceeds 0.25.</li>
+      </ol>
+    </li>
+    <li><strong>Tied Candidates:</strong> If several DTRs on the same feeder exhibit identical outages (e.g. during whole-feeder trips), the DT is flagged as <em>AMBIGUOUS</em> and the feeder is recommended with high confidence.</li>
+    <li><strong>Group Diagnostics:</strong> If &ge;50% of the consumers on a DTR or feeder disagree with its meter, the <em>meter</em> is marked suspect rather than moving dozens of consumers.</li>
+  </ul>
+
+  <h3>3. Data Quality & Privacy Safeguards</h3>
+  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
+    <li><strong>Faulty Meters:</strong> Meters reporting &gt;40 events in a 24-hour period are filtered out as flapping/faulty.</li>
+    <li><strong>Privacy by Design:</strong> Consumer names and physical addresses are strictly excluded from all dashboard views and downloadable Excel reports.</li>
+    <li><strong>Isolated Workspaces:</strong> In public mode, every user session operates in an encrypted, cookie-isolated workspace that auto-deletes after {{ keep_days }} days of inactivity.</li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+jobs/
+store/
+workspaces/
+__pycache__/
+*.xlsx
+*.csv
+data/
+cloudflared.exe
+.secret_key

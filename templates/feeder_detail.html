@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Feeder {{ code }} - GridMap{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="margin-bottom:12px;">
+    <a href="{{ url_for('job', job_id=job_id) }}" class="btn secondary">&larr; Back to Results</a>
+  </div>
+
+  <div class="card-header">
+    <div>
+      <h1>Feeder {{ code }} &mdash; {{ top['Feeder name'].iat[0] if top['Feeder name'].notna().any() else '' }}</h1>
+      <p class="muted">Detailed DTR and Consumer breakdown match results for this feeder.</p>
+    </div>
+    <div>
+      <span class="pill info" style="font-size:13px;padding:6px 14px;">Feeder Code: {{ code }}</span>
+    </div>
+  </div>
+
+  <h3>Feeder Overall Summary</h3>
+  <div class="table-container" style="max-height:160px;margin-bottom:20px;">
+    {{ table_html_top|safe }}
+  </div>
+
+  <div class="card-header" style="border-top:1px solid var(--card-border);padding-top:16px;">
+    <div>
+      <h2>Distribution Transformers (DTRs) on Feeder {{ code }}</h2>
+      <p class="muted">
+        Individual DTR meter behaviour and consumer match rates within breakdowns of this feeder.
+      </p>
+    </div>
+    <div>
+      <input type="text" class="input-search" placeholder="Search DTR code or name..." oninput="filterTable(this, 'dtrTable')">
+    </div>
+  </div>
+
+  <div class="table-container" id="dtrTable">
+    {{ table_html_dtrs|safe }}
+  </div>
+
+  <div class="muted" style="margin-top:12px;font-size:12.5px;">
+    <strong>DTR Result Guide:</strong> MATCH = went off in every breakdown of this feeder &bull; PARTIAL = went off in some breakdowns &bull; MISMATCH = never went off during this feeder's breakdowns &bull; NO DTR METER = cannot be verified from meter timing.
+  </div>
+</div>
+{% endblock %}
