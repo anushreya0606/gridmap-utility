@@ -226,9 +226,184 @@ function startJobPolling(statusUrl) {
   poll();
 }
 
+// --- 6. Click an ID -> trace it to the exact input file, worksheet and row ---
+// Any table cell under an ID column (consumer / account no, meter id, DT code, feeder code,
+// breakdown) is clickable. The server looks the value up in the run's provenance index
+// (provenance.py) and lists every input-file row it came from; "Open in Excel" opens the
+// original input file at that row (on the server's own PC) or downloads a copy that does.
+const TRACE_COLS = new Set(['consumerno', 'consumernumber', 'accountnumber', 'meterid', 'feedermeterid',
+  'dtrmeterid', 'newmeterserialno', 'dtcode', 'feedercode', 'recordedfeeder', 'suggestedfeeder',
+  'recfeeder', 'recdt', 'recordeddt', 'suggesteddt', 'feederindtrmi', 'feederinconsumermi', 'breakdown']);
+
+function traceConfig() {
+  const el = document.getElementById('traceConfig');
+  return el ? { trace: el.dataset.trace, open: el.dataset.open } : null;
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function traceValueOf(td) {
+  if (!td || td.tagName !== 'TD') return null;
+  const table = td.closest('table');
+  if (!table || table.closest('#traceModal')) return null;
+  const th = table.querySelectorAll('thead tr:last-child th')[td.cellIndex];
+  if (!th || !TRACE_COLS.has(th.textContent.toLowerCase().replace(/[^a-z0-9]/g, ''))) return null;
+  const v = td.textContent.replace(/⌖/g, '').trim();
+  return v && !/^(nan|none|n\/a|-)$/i.test(v) ? v : null;
+}
+
+function traceModal() {
+  let m = document.getElementById('traceModal');
+  if (m) return m;
+  m = document.createElement('div');
+  m.id = 'traceModal';
+  m.className = 'trace-modal';
+  m.innerHTML = `<div class="trace-dialog" role="dialog" aria-modal="true" aria-labelledby="traceTitle">
+      <div class="trace-head"><h3 id="traceTitle">Source rows</h3>
+        <button type="button" class="trace-close" aria-label="Close">&times;</button></div>
+      <div class="trace-body"></div></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('.trace-close')) m.classList.remove('open'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') m.classList.remove('open'); });
+  m.querySelector('.trace-body').addEventListener('click', e => {
+    const b = e.target.closest('button[data-src]');
+    if (b) openSourceRow(b);
+  });
+  return m;
+}
+
+async function openTrace(value) {
+  const cfg = traceConfig();
+  if (!cfg || !value) return;
+  const m = traceModal();
+  const body = m.querySelector('.trace-body');
+  m.querySelector('#traceTitle').textContent = `Source of ${value}`;
+  m.classList.add('open');
+  body.innerHTML = '<p class="muted">Looking up source rows&hellip;</p>';
+  for (let tries = 0; tries < 300; tries++) {
+    let d;
+    try {
+      const res = await fetch(`${cfg.trace}?q=${encodeURIComponent(value)}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      d = await res.json();
+    } catch (err) {
+      body.innerHTML = `<p class="bad-text">Could not trace this value: ${escHtml(err.message)}</p>`;
+      return;
+    }
+    if (!m.classList.contains('open')) return;
+    if (d.state === 'building') {
+      body.innerHTML = `<p class="muted">Indexing this run's input files for tracing (first time only, about a minute)&hellip;<br>
+        <small>${escHtml(d.status)}</small></p>`;
+      await new Promise(r => setTimeout(r, 2000));
+      continue;
+    }
+    body.innerHTML = renderTrace(d);
+    return;
+  }
+}
+
+function renderTrace(d) {
+  if (!d.groups || d.groups.length === 0) {
+    return `<p>No row in this run's input files contains <strong>${escHtml(d.query)}</strong>.</p>
+      <p class="muted">Traced sources: the MI workbook sheets the analysis reads (Total Consumer MI Data, Total DTR MI,
+      Total Feeder MI) and the outage reports uploaded with this run.</p>`;
+  }
+  const how = d.local_excel
+    ? 'Open in Excel opens the input file on this PC (read-only) with the row selected.'
+    : 'Open in Excel downloads the input file, saved so Excel opens on that row.';
+  let html = `<p class="muted trace-note">Row numbers are the rows you see in Excel. ${how}</p>`;
+  for (const g of d.groups) {
+    const where = g.sheet && !g.csv ? `${escHtml(g.file)} <span class="trace-sep">&rsaquo;</span> ${escHtml(g.sheet)}` : escHtml(g.file);
+    const kind = g.reference ? `referenced in the <em>${escHtml(g.rows[0] ? g.rows[0].column : '')}</em> column` : escHtml(g.role);
+    const count = g.total > g.rows.length ? `${g.total.toLocaleString()} rows, first ${g.rows.length} shown` : `${g.total.toLocaleString()} row${g.total === 1 ? '' : 's'}`;
+    const hasStart = g.rows.some(r => r.start);
+    html += `<div class="trace-group${g.reference ? ' trace-ref' : ''}">
+      <div class="trace-file"><span class="trace-path">${where}</span>
+        <span class="pill ${g.reference ? 'info' : 'ok'}">${kind}</span> <span class="muted">${count}</span></div>
+      <div class="table-container"><table class="data-table trace-table"><thead><tr><th>Row</th><th>Cell</th><th>Column</th>
+        ${hasStart ? '<th>Event start</th>' : ''}<th></th><th></th></tr></thead><tbody>`;
+    for (const r of g.rows) {
+      const used = (g.role === 'MI master' && !g.reference)
+        ? (r.used ? '<span class="pill ok" title="The analysis keeps the last row for each key; this is it.">used by analysis</span>'
+          : '<span class="pill warn" title="A later row with the same key overrides this one.">duplicate, not used</span>')
+        : '';
+      html += `<tr><td><strong>${r.row.toLocaleString()}</strong></td><td>${escHtml(r.cell)}</td><td>${escHtml(r.column)}</td>
+        ${hasStart ? `<td>${escHtml(r.start || '')}</td>` : ''}<td>${used}</td>
+        <td><button type="button" class="btn trace-open" data-src="${g.src}" data-row="${r.row}" data-col="${r.col}">Open in Excel</button></td></tr>`;
+    }
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+async function openSourceRow(btn) {
+  const cfg = traceConfig();
+  const label = 'Open in Excel';
+  btn.disabled = true;
+  btn.textContent = 'Opening…';
+  try {
+    const body = new URLSearchParams({ src: btn.dataset.src, row: btn.dataset.row, col: btn.dataset.col });
+    const res = await fetch(cfg.open, { method: 'POST', body });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (d.opened) {
+      btn.textContent = 'Opened ✓';
+      btn.title = `Opened ${d.path} at ${d.where}`;
+    } else if (!d.download) {
+      btn.textContent = 'Not downloadable';
+      btn.title = d.error || '';
+      alert(d.error || 'This file is not available for download.');
+    } else {
+      const a = document.createElement('a');
+      a.href = d.download;
+      document.body.appendChild(a); a.click(); a.remove();
+      btn.textContent = 'Downloaded ✓';
+      if (d.error) btn.title = 'Excel could not be opened on the server PC: ' + d.error;
+    }
+  } catch (err) {
+    btn.textContent = 'Failed';
+    btn.title = err.message;
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 4000);
+}
+
+function setupTraceCells() {
+  if (!traceConfig()) return;
+  // Mark ID cells on hover (works for tables rendered later by JS, e.g. the Raw Data Explorer).
+  document.addEventListener('mouseover', e => {
+    const td = e.target.closest && e.target.closest('td');
+    if (!td || td.dataset.traceChecked) return;
+    td.dataset.traceChecked = '1';
+    const v = traceValueOf(td);
+    if (!v) return;
+    td.classList.add('traceable');
+    if (td.querySelector('a')) {           // keep existing links (feeder drill-down); add a trace button
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'trace-btn'; b.textContent = '⌖';
+      b.title = `Trace ${v} to its source file, sheet and row`;
+      td.appendChild(b);
+    } else {
+      td.title = `Click to trace ${v} to its source file, sheet and row`;
+    }
+  });
+  document.addEventListener('click', e => {
+    const q = e.target.closest && e.target.closest('[data-trace-q]');
+    if (q) { openTrace(q.dataset.traceQ); return; }
+    const td = e.target.closest && e.target.closest('td.traceable');
+    if (!td) return;
+    if (e.target.closest('a') || (e.target.closest('button') && !e.target.closest('.trace-btn'))) return;
+    if (String(window.getSelection && window.getSelection()) !== '') return;   // user is selecting text
+    e.preventDefault();
+    openTrace(traceValueOf(td));
+  });
+}
+
 // Global initialization
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   setupDropzones();
   setupUploadForm();
+  setupTraceCells();
 });

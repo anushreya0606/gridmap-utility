@@ -10,3 +10,15 @@ cloudflared.exe
 __pycache__/
 *.tmp.*
 .pytest_cache/
+# Local-only files not needed on HF Spaces
+start_*.bat
+deploy_colab.ipynb
+app_hf.py
+render.yaml
+# Local-only: never publish (repo is public)
+gridmap_code_final/
+scratch/
+.omc/
+.claude/
+.DS_Store
+provenance.sqlite*

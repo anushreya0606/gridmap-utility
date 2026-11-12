@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Feeder–DTR–Consumer Mapping Check{% endblock %}</title>
+  <title>{% block title %}GridMap Utility - Feeder / DTR / Consumer Mapping Check{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script>
     // Immediate theme execution to prevent screen flicker
@@ -18,8 +18,22 @@
 <body>
   <header>
     <a class="brand" href="{{ url_for('index') }}">
-      <span class="brand-icon">⚡</span>
-      <span>GridMap Utility</span>
+      <div class="brand-badge">
+        <svg class="brand-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="6" height="6" rx="1"></rect>
+          <rect x="15" y="3" width="6" height="6" rx="1"></rect>
+          <rect x="15" y="15" width="6" height="6" rx="1"></rect>
+          <rect x="3" y="15" width="6" height="6" rx="1"></rect>
+          <path d="M9 6h6"></path>
+          <path d="M6 9v6"></path>
+          <path d="M18 9v6"></path>
+          <path d="M9 18h6"></path>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">GridMap Utility</span>
+        <span class="brand-subtitle">Network Mapping Verification</span>
+      </div>
     </a>
     <nav>
       <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">New Run</a>
@@ -29,7 +43,18 @@
     </nav>
     <div class="header-right">
       <button class="theme-toggle" id="themeBtn" onclick="cycleTheme()" title="Switch Light / Dark / Auto">
-        🖥 Auto
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <span id="themeLabel">Auto</span>
       </button>
     </div>
   </header>

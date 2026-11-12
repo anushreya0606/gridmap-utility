@@ -1,50 +1,726 @@
 {% extends "base.html" %}
 
-{% block title %}Rules & Methodology - GridMap{% endblock %}
+{% block title %}Rules, Methodology & Glossary - GridMap Utility{% endblock %}
 
 {% block content %}
 <div class="card">
-  <h1>Rules & Analysis Methodology</h1>
-  <p class="muted">
-    The application applies strictly deterministic, objective mathematical rules based entirely on outage start and restore timestamps. The same principles are applied uniformly across all feeders, DTRs, and circles with zero hardcoded exceptions.
-  </p>
+  <div class="card-header">
+    <div>
+      <h1>Rules, Methodology & Comprehensive Glossary</h1>
+      <p class="muted">
+        Deterministic mathematical criteria for outage timing topology analysis, along with a complete reference glossary explaining every metric, verdict, and Excel report column.
+      </p>
+    </div>
+  </div>
 
-  <h3 style="margin-top:24px;">1. Client Feeder Breakdown Check (Primary Check)</h3>
-  <p>
-    For every feeder breakdown interval (from feeder off-time to on-time):
-  </p>
-  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
-    <li><strong>Feeder &rarr; DTR:</strong> Did each DTR recorded under this feeder go off within the breakdown window (feeder off &minus; tolerance to feeder on &plus; tolerance)?</li>
-    <li><strong>Feeder &rarr; Consumer:</strong> Did each consumer recorded under this feeder experience an outage inside the breakdown window?</li>
-    <li><strong>DTR &rarr; Consumer:</strong> For each DTR whose meter actually tripped during the feeder breakdown, did its connected consumers trip during the DTR's specific outage interval?</li>
-    <li><strong>Absence of Data is NOT Mismatch:</strong> DTRs without physical meters, consumers whose meters sent no telemetry that day, and faulty meters are categorized separately as <em>NO DTR METER</em> or <em>NO METER DATA</em>, never as mismatches.</li>
-    <li><strong>Suspect Breakdowns:</strong> If fewer than 10% of a feeder's recorded consumers experienced an outage, the breakdown record itself is flagged as <em>SUSPECT</em> (e.g. meter assigned to the wrong feeder or an isolated meter power cycle). Results are reported both with and without suspect events.</li>
-  </ul>
+  <!-- Search Filter for Entire Glossary -->
+  <div style="background:var(--primary-light);border:1px solid var(--card-border);padding:14px 18px;border-radius:var(--radius-md);margin-bottom:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div style="font-weight:700;color:var(--primary-dark);font-size:14px;">
+      Quick Glossary Search:
+    </div>
+    <div style="flex:1;min-width:240px;">
+      <input type="text" id="glossarySearch" class="input-search" style="width:100%;max-width:480px;background:#fff;" 
+             placeholder="Search any term (e.g. Tolerance, Suspect, Jaccard, Peer-group, DTR Verdict)..." 
+             oninput="filterGlossary(this)">
+    </div>
+    <div style="font-size:12px;color:var(--fg-subtle);">
+      Instant filter across all 6 categories below
+    </div>
+  </div>
 
-  <h3>2. Topology Engine: Wrong Mapping Identification</h3>
-  <p>
-    When a consumer trips repeatedly, its event profile is compared against every feeder and DTR:
-  </p>
-  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
-    <li><strong>Dual-Edge Match:</strong> An outage match requires both <em>Start</em> AND <em>Restore</em> to coincide within &plusmn;2 minutes. Restores distinguish feeders that trip simultaneously due to upstream 33 kV / grid substation events but restore at staggered times.</li>
-    <li><strong>Jaccard Overlap:</strong> The score between consumer \(i\) and candidate source \(s\) is computed as \(J = \frac{m}{n_i + n_s - m}\), where \(m\) is the count of shared events.</li>
-    <li><strong>Virtual DTR Peer Groups:</strong> For DTRs without dedicated smart meters, virtual events are synthesized when &ge;50% (and &ge;3) of the DTR's consumers trip concurrently. A consumer is never counted toward its own group's evidence (leave-one-out validation).</li>
-    <li><strong>Flagging Thresholds:</strong> A consumer is flagged as wrongly mapped only when:
-      <ol style="margin:6px 0 6px 20px;">
-        <li>It follows &ge;60% of the suggested source's outages (\(m \ge 2\)).</li>
-        <li>It follows &le;40% of its recorded source's outages.</li>
-        <li>The Jaccard score margin between suggested and recorded exceeds 0.25.</li>
-      </ol>
-    </li>
-    <li><strong>Tied Candidates:</strong> If several DTRs on the same feeder exhibit identical outages (e.g. during whole-feeder trips), the DT is flagged as <em>AMBIGUOUS</em> and the feeder is recommended with high confidence.</li>
-    <li><strong>Group Diagnostics:</strong> If &ge;50% of the consumers on a DTR or feeder disagree with its meter, the <em>meter</em> is marked suspect rather than moving dozens of consumers.</li>
-  </ul>
-
-  <h3>3. Data Quality & Privacy Safeguards</h3>
-  <ul style="margin:10px 0 16px 24px;line-height:1.7;">
-    <li><strong>Faulty Meters:</strong> Meters reporting &gt;40 events in a 24-hour period are filtered out as flapping/faulty.</li>
-    <li><strong>Privacy by Design:</strong> Consumer names and physical addresses are strictly excluded from all dashboard views and downloadable Excel reports.</li>
-    <li><strong>Isolated Workspaces:</strong> In public mode, every user session operates in an encrypted, cookie-isolated workspace that auto-deletes after {{ keep_days }} days of inactivity.</li>
-  </ul>
+  <!-- Category Shortcut Jump Buttons -->
+  <div class="glossary-nav">
+    <button class="glossary-nav-btn active" onclick="jumpSection('sec1')">1. Network & Data</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec2')">2. Breakdown Check</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec3')">3. Wrong-Mapping Check</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec4')">4. DTR &rarr; Feeder Check</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec5')">5. Mapping Tree</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec6')">6. Data Checks & Website</button>
+    <button class="glossary-nav-btn" onclick="jumpSection('sec_math')">7. Mathematical Rules</button>
+  </div>
 </div>
+
+<!-- 1. NETWORK & DATA -->
+<div class="card glossary-section" id="sec1">
+  <div class="card-header">
+    <div>
+      <h2>1. Network & Data Terminology</h2>
+      <p class="muted">Core electricity distribution network entities and data files.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Feeder</span></td>
+          <td>An 11 kV line leaving a substation. It supplies many DTRs.</td>
+          <td><code>Feeder code</code> e.g. <code>100000000001</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DTR / DT</span></td>
+          <td>Distribution Transformer. Steps 11 kV down to the low voltage used by consumers. One feeder has many DTRs; one DTR supplies many consumers.</td>
+          <td><code>DT code</code> e.g. <code>ABCD123456</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Consumer</span></td>
+          <td>A customer connection with a smart meter. Identified by the consumer (account) number.</td>
+          <td><code>Consumer No</code> e.g. <code>40000000001</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Mapping</span></td>
+          <td>Which feeder a DTR is connected to, and which DTR (and feeder) a consumer is connected to.</td>
+          <td><code>Feeder &rarr; DTR &rarr; Consumer</code> hierarchy</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">MI file (MI master)</span></td>
+          <td>Meter Installation workbook from the utility. It holds the RECORDED mapping: sheets <em>Total Consumer MI Data</em>, <em>Total DTR MI</em>, <em>Total Feeder MI</em>.</td>
+          <td><code>Genus Consumer MI Data.xlsx</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded mapping</span></td>
+          <td>The feeder/DTR written in the MI file for a consumer or DTR. This is what the tool checks.</td>
+          <td><code>Recorded Feeder</code>, <code>Recorded DT</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Suggested mapping</span></td>
+          <td>The feeder/DTR the outage timing points to when the recorded one looks wrong. A suggestion to verify in the field, not a final answer.</td>
+          <td><code>Suggested Feeder</code>, <code>Suggested DT</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Meter ID</span></td>
+          <td>Serial number of the smart meter (consumer, DTR or feeder meter).</td>
+          <td><code>Meter ID</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DTR meter / Feeder meter</span></td>
+          <td>A meter installed on the DTR or on the feeder itself. It records when that DTR or feeder lost and regained power.</td>
+          <td>Many DTRs have no meter (handled without penalty)</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Outage report</span></td>
+          <td>File listing power-failure events: consumer, DTR or feeder outage report. The type is detected automatically from the columns.</td>
+          <td><code>Power Failure Report Consumer Meter.csv</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Outage event</span></td>
+          <td>One loss of power recorded by a meter: an off time and an on time.</td>
+          <td>One row in an outage report</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Off time (event_occurred)</span></td>
+          <td>When the meter lost power.</td>
+          <td><code>Feeder off</code>, <code>DTR off</code>, <code>Consumer off</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">On time (event_restored)</span></td>
+          <td>When power came back.</td>
+          <td><code>Feeder on</code>, <code>DTR on</code>, <code>Consumer on</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Circle</span></td>
+          <td>A utility administrative area (e.g. <code>HARIDWAR_CIRCLE</code>). Detected from the data, never hard-coded.</td>
+          <td><code>Circle Name</code> in the MI file</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 2. BREAKDOWN CHECK -->
+<div class="card glossary-section" id="sec2">
+  <div class="card-header">
+    <div>
+      <h2>2. Feeder Breakdown Check Terminology</h2>
+      <p class="muted">Verification of elements inside the feeder breakdown time window.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Feeder breakdown</span></td>
+          <td>One outage of a feeder, from its feeder meter: feeder off time to feeder on time.</td>
+          <td><code>Breakdown</code> e.g. <code>100000000001 @ 16-10 17:32</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Breakdown window</span></td>
+          <td>Feeder off time minus tolerance, to feeder on time plus tolerance. Anything below the feeder should go off inside this window.</td>
+          <td>e.g. <code>17:30 to 17:41</code> for a <code>17:32&ndash;17:39</code> breakdown</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Tolerance</span></td>
+          <td>Extra minutes allowed because meter clocks are not perfectly in sync. Default &plusmn;2 minutes; can be adjusted in New Run settings.</td>
+          <td><code>Timing tolerance (minutes)</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Breakdown (min)</span></td>
+          <td>How long the feeder breakdown lasted, in minutes.</td>
+          <td><code>Breakdown (min) = 7</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Feeder &rarr; DTR check</span></td>
+          <td>For each feeder breakdown: did each DTR recorded on that feeder go off inside the breakdown window?</td>
+          <td><code>Feeder_DTR_Breakdowns</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Feeder &rarr; Consumer check</span></td>
+          <td>For each feeder breakdown: did each consumer recorded on that feeder go off inside the breakdown window?</td>
+          <td><code>Feeder_Consumer_Breakdowns</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DTR &rarr; Consumer check</span></td>
+          <td>For each DTR that went off in a breakdown: did its recorded consumers go off inside the DTR's own off-on time?</td>
+          <td><code>DTR_Consumer_Breakdowns</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">MATCH</span></td>
+          <td>It went off inside the window, as the recorded mapping predicts. On per-element sheets: it went off in EVERY breakdown checked.</td>
+          <td>Green cell / pill in summary</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">MISMATCH</span></td>
+          <td>It had data that day but did NOT go off inside the window &mdash; a sign of wrong mapping. On per-element sheets: it went off in NO breakdown.</td>
+          <td>Red cell / pill in summary</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">PARTIAL</span></td>
+          <td>Per element: went off in some breakdowns but not all. Could be a data/meter issue or wrong mapping &mdash; worth a look.</td>
+          <td>Yellow cell / pill</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">No data (not counted)</span></td>
+          <td>Cannot be judged, so it is NOT counted as match or mismatch: NO DTR METER, NO METER DATA or FAULTY METER.</td>
+          <td><code>Summary</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">NO DTR METER</span></td>
+          <td>The DTR has no DTR meter installed, so we cannot know when it tripped.</td>
+          <td><code>Feeder_DTR_Breakdowns</code>, Result column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">NO METER DATA</span></td>
+          <td>The consumer's meter sent no outage event at all that day, so it cannot be judged (it may have been offline).</td>
+          <td><code>Feeder_Consumer_Breakdowns</code>, Result column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">FAULTY METER</span></td>
+          <td>The meter reported too many outages in one day (default &gt;40); it is excluded as flapping/unreliable.</td>
+          <td><code>Faulty_Meters_Excluded</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Match %</span></td>
+          <td><code>MATCH / (MATCH + MISMATCH)</code>. No-data rows are excluded to preserve statistical integrity.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Breakdown checks (rows)</span></td>
+          <td>Number of (breakdown &times; element) checks. A DTR on a feeder with 3 breakdowns is checked 3 times.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Unique elements checked</span></td>
+          <td>Number of distinct DTRs or consumers that could be judged, each counted once.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Always matched</span></td>
+          <td>Element went off in every breakdown it was checked in: mapping confirmed.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Partly matched</span></td>
+          <td>Element went off in some breakdowns, not all.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Never matched</span></td>
+          <td>Element did not go off in any breakdown: strongest sign of wrong mapping.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Exact timing</span></td>
+          <td>Off AND on time both within the tolerance of the feeder's (or DTR's). The strongest kind of match.</td>
+          <td><code>Exact timing (off & on within tol)</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Off diff (min)</span></td>
+          <td>Element off time minus feeder (or DTR) off time, in minutes.</td>
+          <td><code>Off diff (min) = 0.5</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Breakdown status</span></td>
+          <td>Whether a feeder breakdown record can be trusted: Confirmed, SUSPECT BREAKDOWN or Not verifiable.</td>
+          <td><code>Breakdown_Status</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Confirmed (breakdown)</span></td>
+          <td>At least 10% (default) of the feeder's own consumers went off. A verified breakdown; its results are reliable.</td>
+          <td><code>Breakdown_Status</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">SUSPECT BREAKDOWN</span></td>
+          <td>Fewer than 10% (default) of the feeder's own consumers went off. The breakdown record or feeder meter is doubtful (e.g. meter on another feeder), so its mismatches do not prove wrong mapping.</td>
+          <td><code>Breakdown_Status</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Not verifiable (breakdown)</span></td>
+          <td>No consumers with data are recorded on that feeder, so the breakdown cannot be confirmed or rejected.</td>
+          <td><code>Breakdown status</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Own consumers that went off (share)</span></td>
+          <td>Of the feeder's recorded consumers that sent data, the share that confirmed power failure during the breakdown.</td>
+          <td><code>Breakdown_Status</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Confirmed breakdowns only</span></td>
+          <td>The exact same counts, leaving out suspect breakdowns.</td>
+          <td><code>Summary</code> sheet, second table</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Counts based on</span></td>
+          <td>Per-feeder counts use only confirmed breakdowns; if ALL of a feeder's breakdowns are suspect, they are marked 'treat with care'.</td>
+          <td><code>Feeder_Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DTR went off (breakdowns)</span></td>
+          <td>How many of the feeder's breakdowns the DTR went off in, e.g. <code>2/3</code>.</td>
+          <td><code>Feeder_DTR_Counts</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Feeder_Summary</span></td>
+          <td>One row per feeder: number of DTRs and consumers and how many MATCH, PARTIAL, MISMATCH or have no data.</td>
+          <td>Sheet name in Excel</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Feeder_DTR_Counts</span></td>
+          <td>Same as Feeder_Summary, opened up per DTR. Use the 1/2 buttons at the top-left of Excel to collapse/expand.</td>
+          <td>Sheet name in Excel</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 3. WRONG-MAPPING CHECK -->
+<div class="card glossary-section" id="sec3">
+  <div class="card-header">
+    <div>
+      <h2>3. Wrong-Mapping Identification Terminology</h2>
+      <p class="muted">Outage pattern matching across candidate sources.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Outage pattern matching</span></td>
+          <td>A consumer's outages are compared with the outages of every DTR and feeder. Two outages match when off AND on time are both within tolerance.</td>
+          <td><code>Mapping_Report.xlsx</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Outages followed (x/y)</span></td>
+          <td>The consumer went off in x of the y outages of that candidate DTR/feeder.</td>
+          <td><code>Recorded DT outages followed = 0/4</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Score</span></td>
+          <td>How well two outage histories agree, from 0 (never together) to 1 (always together). Computed as Jaccard overlap: shared outages / all distinct outages of both.</td>
+          <td><code>DT score (recorded)</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">WRONG</span></td>
+          <td>The consumer follows another DTR/feeder clearly better than its recorded one (&ge;60% of the other's outages, &le;40% of the recorded one's, score gap &ge; 0.25, &ge; 2 shared outages).</td>
+          <td><code>DTR check / Feeder check</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">LIKELY WRONG</span></td>
+          <td>Same as WRONG, but the recorded DTR/feeder had no usable outages, so the evidence is one-sided.</td>
+          <td><code>DTR check / Feeder check</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">OK (mapping)</span></td>
+          <td>The consumer follows its recorded DTR/feeder; no better candidate found.</td>
+          <td>Results</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">NOT EVALUABLE</span></td>
+          <td>Too few outages (fewer than 2) to judge.</td>
+          <td>Results</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">GROUP ISSUE (check source meter)</span></td>
+          <td>Most consumers of this DTR/feeder disagree with its meter, so the METER is probably wrong, not the consumers.</td>
+          <td><code>DTR check / Feeder check</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Confidence (High / Medium / Low)</span></td>
+          <td>How strong the evidence is that the RECORDED mapping is wrong. High: &ge;3 shared outages and large score gap. Medium: clear but smaller. Low: one-sided evidence.</td>
+          <td><code>Confidence</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">AMBIGUOUS (n)</span></td>
+          <td>The consumer follows n DTRs equally well (they share the same feeder outages). The feeder is clear but the exact DTR needs a field check.</td>
+          <td><code>Suggested DT</code></td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Candidates</span></td>
+          <td>The DTRs/feeders tied for best match (first 5 shown).</td>
+          <td><code>Candidates</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Peer-group DTR events</span></td>
+          <td>For DTRs without a meter: moments when &ge;50% (and &ge;3) of the DTR's own consumers went off together. A consumer never counts in its own group's evidence.</td>
+          <td>Progress log</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Mismatch_Patterns</span></td>
+          <td>Many consumers moving the same way (recorded feeder &rarr; suggested feeder). Large groups usually mean a records error, not many separate wiring errors.</td>
+          <td>Sheet name</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Suspect_Source_Meters</span></td>
+          <td>DTR or feeder meters that are probably installed on a different DTR/feeder than recorded.</td>
+          <td>Sheet name</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DTR_on_Wrong_Feeder</span></td>
+          <td>DTRs whose own meter follows another feeder's outages.</td>
+          <td>Sheet name</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Faulty_Meters_Excluded</span></td>
+          <td>Consumer meters with too many outages in one day (default &gt; 40).</td>
+          <td>Sheet name</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Not_in_MI</span></td>
+          <td>Consumers in the outage report that are not found in the MI master file.</td>
+          <td>Sheet name</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Feeder_Event_Check</span></td>
+          <td>For each feeder outage: how many of its own consumers followed it, and which other feeder's consumers followed it most.</td>
+          <td>Sheet name</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 4. DTR -> FEEDER CHECK -->
+<div class="card glossary-section" id="sec4">
+  <div class="card-header">
+    <div>
+      <h2>4. DTR &rarr; Feeder Check Terminology</h2>
+      <p class="muted">Independent verification of whether each DTR is on its recorded feeder.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Meter check</span></td>
+          <td>Did the DTR's own meter go off with its recorded feeder's outages?</td>
+          <td><code>DTR_Feeder_Check</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Consumer check</span></td>
+          <td>Do the DTR's consumers follow the recorded feeder? Needs at least 3 consumers with a feeder-level test.</td>
+          <td><code>DTR_Feeder_Check</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">CORRECT</span></td>
+          <td>The checks confirm the DTR is on its recorded feeder.</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">WRONG (both / meter / consumer)</span></td>
+          <td>The DTR seems to be on another feeder; the brackets indicate which evidence confirmed it.</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">CONFLICT</span></td>
+          <td>One check says correct, the other says wrong. Requires an on-ground field check.</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">FEEDER METER ISSUE</span></td>
+          <td>The DTR looks wrong only because a feeder meter is on another feeder; the DTR itself is probably fine.</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">UNCLEAR</span></td>
+          <td>There is some data but it is not statistically decisive.</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">NOT CHECKABLE</span></td>
+          <td>No usable outage data for this DTR (its feeder had no recorded breakdown, or the DTR has no meter and too few consumers with data).</td>
+          <td><code>verdict</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">% correct of DTRs judged</span></td>
+          <td><code>CORRECT / (CORRECT + WRONG + CONFLICT)</code>.</td>
+          <td><code>Summary</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">records_disagree</span></td>
+          <td>The DTR MI sheet and the Consumer MI sheet give different feeders for the same DTR.</td>
+          <td><code>DTR_Feeder_Check</code> sheet</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 5. MAPPING TREE -->
+<div class="card glossary-section" id="sec5">
+  <div class="card-header">
+    <div>
+      <h2>5. Mapping Tree Terminology</h2>
+      <p class="muted">Hierarchy and corrected topology workbook views.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Feeder_Outage_View</span></td>
+          <td>Every feeder outage &rarr; the DTRs recorded on that feeder &rarr; their consumers, with off/on times. Uses the RECORDED mapping.</td>
+          <td>Sheet name in Excel</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Went off with feeder / DID NOT GO OFF</span></td>
+          <td>Whether the consumer went off within the tolerance of the feeder (off and on time).</td>
+          <td><code>Feeder_Outage_View</code>, Status column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Mapping_Tree</span></td>
+          <td>Every consumer placed under its CORRECTED feeder and DTR, with all its outage times that day.</td>
+          <td>Sheet name in Excel</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded mapping OK</span></td>
+          <td>Checked, and it follows its recorded DTR/feeder.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">CORRECTED (High/Medium)</span></td>
+          <td>Moved to the suggested DTR and feeder based on high/medium confidence telemetry evidence.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">FEEDER CORRECTED, DT needs field check</span></td>
+          <td>Moved to the suggested feeder; the exact DTR is ambiguous among several peers.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">DT UNKNOWN - field check</span></td>
+          <td>Placeholder DTR for consumers whose feeder is clear but DTR is not.</td>
+          <td><code>DT code</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded (weak sign of error - check)</span></td>
+          <td>Low-confidence flag; kept as recorded until field verified.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded (source meter suspect)</span></td>
+          <td>The DTR/feeder meter is the likely problem; kept as recorded.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded (not enough outages to check)</span></td>
+          <td>Had events, but too few to judge.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Recorded (no outage data - not checked)</span></td>
+          <td>No outage that day; kept as recorded in MI.</td>
+          <td><code>Mapping</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">NO DT CODE IN MI / NO FEEDER CODE IN MI</span></td>
+          <td>The MI file has no DT/feeder written for this consumer.</td>
+          <td><code>DT code</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Was (feeder / DT)</span></td>
+          <td>The recorded mapping before correction.</td>
+          <td><code>Mapping_Tree</code> sheet</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">(n checked)</span></td>
+          <td>On feeder/DTR rows: how many of their consumers could actually be checked.</td>
+          <td>Feeder and DTR rows</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Grouped rows (1 / 2 / 3)</span></td>
+          <td>Buttons at the top-left of the Excel sheet: 1 = feeders only, 2 = + DTRs, 3 = everything.</td>
+          <td>Excel outline buttons</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 6. DATA CHECKS & WEBSITE -->
+<div class="card glossary-section" id="sec6">
+  <div class="card-header">
+    <div>
+      <h2>6. Data Quality Checks & System Terminology</h2>
+      <p class="muted">Verification of uploaded files and system mechanics.</p>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table glossary-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">Term</th>
+          <th>Meaning</th>
+          <th style="width:300px;">Where You See It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="term-tag">Data checks</span></td>
+          <td>Checks run on every upload: readable dates, period covered, coverage in the MI file, duplicates removed, shared days between files.</td>
+          <td><code>Data_Checks</code> sheet / results page</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">OK / WARNING / ERROR</span></td>
+          <td>OK = fine. WARNING = results still produced but may be weaker. ERROR = the data cannot be checked; the run stops with an explanation.</td>
+          <td><code>Status</code> column</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Coverage</span></td>
+          <td>Share of consumers/meters in the outage files that are found in the MI file. Low coverage usually means files from different circles.</td>
+          <td>Data checks</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Period covered</span></td>
+          <td>First and last date in a file, and the number of days.</td>
+          <td>Data checks</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Duplicate rows removed</span></td>
+          <td>Same meter with the same off time listed more than once; counted once.</td>
+          <td>Data checks</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Stored events</span></td>
+          <td>Every uploaded outage event is saved so past days can be analysed again together with new ones. The same event is never stored twice.</td>
+          <td>Stored events page</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Events analysed (scope)</span></td>
+          <td>Which events a run used: only files uploaded now, all stored events, the last N days, or a date range.</td>
+          <td>Results page</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Past runs</span></td>
+          <td>Every run with its results and Excel files, preserved across server restarts.</td>
+          <td>Past runs page</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Private workspace</span></td>
+          <td>On a public deployment, each browser has its own isolated runs and stored events (kept with an encrypted cookie). Others cannot see them. Deleted after 7 days without use.</td>
+          <td>New run page</td>
+        </tr>
+        <tr>
+          <td><span class="term-tag">Rules used</span></td>
+          <td>The thresholds applied in a run (tolerance, suspect %, faulty-meter limit, wrong-mapping limits). Printed with every result so anyone can audit them.</td>
+          <td>Results page / Summary sheet</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 7. MATHEMATICAL RULES & ALGORITHMIC SAFEGUARDS -->
+<div class="card glossary-section" id="sec_math">
+  <div class="card-header">
+    <div>
+      <h2>7. Mathematical Rules & Verification Engine</h2>
+      <p class="muted">Detailed algorithmic logic behind the analysis engine.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:16px;">Breakdown Window Evaluation</h3>
+  <p style="margin-bottom:12px;">
+    An element \(e\) (DTR or Consumer) is judged against a Feeder Breakdown starting at \(S_f\) and restoring at \(E_f\) with tolerance \(\Delta = 2\text{ min}\):
+  </p>
+  <ul style="margin:0 0 16px 24px;line-height:1.7;">
+    <li><strong>MATCH:</strong> \(\exists\) outage on \(e\) starting at \(S_e\) such that \(S_f - \Delta \le S_e \le E_f + \Delta\).</li>
+    <li><strong>MISMATCH:</strong> Element \(e\) reported at least one event that day but did not trip within \([S_f - \Delta, E_f + \Delta]\).</li>
+    <li><strong>NO DATA:</strong> Element \(e\) has no meter installed or sent zero events that calendar day. Never counted as mismatch.</li>
+  </ul>
+
+  <h3>Jaccard Outage Pattern Matching</h3>
+  <p style="margin-bottom:12px;">
+    For consumers with multiple trips, similarity with candidate source \(s\) is calculated via Jaccard overlap:
+  </p>
+  <div style="background:var(--primary-light);padding:12px 18px;border-radius:var(--radius-sm);font-family:ui-monospace, monospace;margin-bottom:16px;">
+    J(c, s) = |Outages(c) &cap; Outages(s)| / |Outages(c) &cup; Outages(s)|
+  </div>
+  <p>
+    Flagging requires \(\text{Recall}(s) \ge 60\%\), \(\text{Recall}(\text{rec}) \le 40\%\), and a score gap exceeding 0.25.
+  </p>
+</div>
+
+<script>
+function filterGlossary(input) {
+  const q = input.value.toLowerCase().trim();
+  const rows = document.querySelectorAll('.glossary-table tbody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+function jumpSection(secId) {
+  const el = document.getElementById(secId);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.glossary-nav-btn').forEach(btn => btn.classList.remove('active'));
+    if (event && event.target) event.target.classList.add('active');
+  }
+}
+</script>
 {% endblock %}
