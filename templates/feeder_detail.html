@@ -3,6 +3,7 @@
 {% block title %}Feeder {{ code }} - GridMap{% endblock %}
 
 {% block content %}
+<div id="traceConfig" hidden data-trace="{{ url_for('trace_source', job_id=job_id) }}" data-open="{{ url_for('source_open', job_id=job_id) }}"></div>
 <div class="card">
   <div style="margin-bottom:12px;">
     <a href="{{ url_for('job', job_id=job_id) }}" class="btn secondary">&larr; Back to Results</a>

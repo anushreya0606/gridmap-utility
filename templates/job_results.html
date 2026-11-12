@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Analysis Results - GridMap{% endblock %}
+{% block title %}Analysis Results - GridMap Utility{% endblock %}
 
 {% block content %}
 <!-- Top Header & Actions -->
@@ -14,28 +14,32 @@
       {% endif %}
     </div>
     <div style="text-align:right;">
-      <a href="{{ url_for('index') }}" class="btn secondary">⚡ New Run</a>
+      <a href="{{ url_for('index') }}" class="btn secondary">Start New Run</a>
     </div>
   </div>
 
   <!-- Download Bar: 4 Excel Buttons -->
   <div class="download-bar">
     <div class="download-bar-title">
-      <span>📥 Download Excel Reports:</span>
+      <span>Download Excel Reports:</span>
     </div>
-    <a href="{{ url_for('download', job_id=job_id, name='All_Results.xlsx') }}" class="btn" style="background:#047857;font-weight:700;">
-      📊 All_Results.xlsx (Combined Master)
+    <a href="{{ url_for('download', job_id=job_id, name='All_Results.xlsx') }}" class="btn" style="background:#0284c7;font-weight:700;">
+      All_Results.xlsx (Combined Master)
     </a>
-    <a href="{{ url_for('download', job_id=job_id, name='Breakdown_Mapping_Check.xlsx') }}" class="btn ghost">
-      ⚡ Breakdown_Mapping_Check.xlsx
+    <a href="{{ url_for('download', job_id=job_id, name='Breakdown_Mapping_Check.xlsx') }}" class="btn secondary">
+      Breakdown_Mapping_Check.xlsx
     </a>
-    <a href="{{ url_for('download', job_id=job_id, name='Mapping_Report.xlsx') }}" class="btn ghost">
-      📋 Mapping_Report.xlsx
+    <a href="{{ url_for('download', job_id=job_id, name='Mapping_Report.xlsx') }}" class="btn secondary">
+      Mapping_Report.xlsx
     </a>
-    <a href="{{ url_for('download', job_id=job_id, name='Feeder_DTR_Consumer.xlsx') }}" class="btn ghost">
-      🌳 Feeder_DTR_Consumer.xlsx
+    <a href="{{ url_for('download', job_id=job_id, name='Feeder_DTR_Consumer.xlsx') }}" class="btn secondary">
+      Feeder_DTR_Consumer.xlsx
     </a>
   </div>
+  <p class="muted" style="font-size:12px;margin:-4px 0 8px;">
+    Tip: click any consumer number, meter ID, DT code, feeder code or breakdown to trace it back to the exact input file, worksheet and row it was read from.
+  </p>
+  <div id="traceConfig" hidden data-trace="{{ url_for('trace_source', job_id=job_id) }}" data-open="{{ url_for('source_open', job_id=job_id) }}"></div>
 
   <div class="muted" style="font-size:12px;">
     Applied Rules: Timing tolerance: <strong>&plusmn;{{ job.settings.tol }} min</strong> &bull; Suspect breakdown below: <strong>{{ job.settings.suspect_pct }}%</strong> &bull; Max events/day: <strong>{{ job.settings.max_events }}</strong> &bull; Alt source recall: <strong>&ge;{{ job.settings.min_alt_recall }}%</strong> &bull; Rec source recall: <strong>&le;{{ job.settings.max_rec_recall }}%</strong>
@@ -96,6 +100,93 @@
   </div>
 </div>
 
+<!-- ==========================================================================
+     RAW INPUT DATA & CROSS-CHECK EXPLORER
+     ========================================================================== -->
+<div class="card" id="rawCrossCheckSection" style="border-top:3px solid var(--primary);">
+  <div class="card-header">
+    <div>
+      <h2>Raw Input Telemetry & Cross-Check Explorer</h2>
+      <p class="muted">
+        Inspect the original raw outage telemetry fed into the analysis and cross-check any consumer, DTR, or feeder directly against the summary breakdown results.
+      </p>
+    </div>
+    <div>
+      <span class="pill info" style="font-size:12.5px;padding:5px 12px;">100% Traceable Mathematical Proof</span>
+    </div>
+  </div>
+
+  <!-- Interactive Cross-Check Lookup Tool -->
+  <div class="crosscheck-box">
+    <div style="margin-bottom:12px;">
+      <label style="font-weight:700;font-size:13.5px;display:block;margin-bottom:6px;color:var(--primary-dark);">
+        Cross-Check Any Consumer, Meter, DTR, or Feeder:
+      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="crossCheckInput" class="input-search" style="flex:1;min-width:280px;font-size:14px;padding:9px 14px;" 
+               placeholder="Enter Consumer No, Meter ID, DTR Code or Feeder Code..."
+               onkeydown="if(event.key==='Enter') executeCrossCheck()">
+        <button class="btn" onclick="executeCrossCheck()" style="padding:9px 20px;font-weight:600;">
+          Verify Telemetry
+        </button>
+      </div>
+      {% if samples %}
+      <div style="font-size:12px;color:var(--fg-subtle);margin-top:6px;">
+        Try quick sample query from this run:
+        {% for label, val in samples %}
+        <a href="javascript:void(0)" onclick="quickQuery(this.dataset.q)" data-q="{{ val }}" style="font-weight:600;margin-right:8px;">{{ label }} {{ val }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Cross-Check Results Container (Loaded dynamically) -->
+    <div id="crossCheckResult" style="display:none;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-md);padding:18px;margin-top:14px;animation:fadeIn 0.3s ease;"></div>
+  </div>
+
+  <!-- Tabbed Raw Telemetry Browser -->
+  <div class="raw-tabs-header">
+    <button class="raw-tab active" id="tab_consumer_events" onclick="switchRawTab('consumer_events')">Consumer Outages (Raw Telemetry)</button>
+    <button class="raw-tab" id="tab_dtr_events" onclick="switchRawTab('dtr_events')">DTR Outages (Raw Telemetry)</button>
+    <button class="raw-tab" id="tab_feeder_events" onclick="switchRawTab('feeder_events')">Feeder Outages (Raw Telemetry)</button>
+    <button class="raw-tab" id="tab_breakdown_checks" onclick="switchRawTab('breakdown_checks')">Breakdown Verification Checks (Evaluated Rows)</button>
+  </div>
+
+  <!-- Controls Bar: Filter, Search, Pagination -->
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="display:flex;gap:10px;align-items:center;flex:1;min-width:280px;flex-wrap:wrap;">
+      <input type="text" id="rawSearchInput" class="input-search" style="width:280px;" 
+             placeholder="Search by meter, consumer, code..." oninput="debounceRawSearch()">
+      
+      <div id="rawResultFilterGroup" style="display:none;gap:6px;align-items:center;">
+        <span style="font-size:12.5px;color:var(--fg-subtle);font-weight:600;">Result Filter:</span>
+        <select id="rawResultFilter" onchange="loadRawDataPage(1)" style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--input-border);background:var(--input-bg);color:var(--fg);font-size:13px;">
+          <option value="ALL">All Results</option>
+          <option value="MATCH">MATCH Only</option>
+          <option value="MISMATCH">MISMATCH Only</option>
+          <option value="NO METER DATA">No Meter Data</option>
+          <option value="NO DTR METER">No DTR Meter</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div style="display:flex;gap:8px;align-items:center;font-size:13px;">
+      <span id="rawPageInfo" class="muted" style="font-weight:600;">Loading rows...</span>
+      <button class="btn secondary" id="rawPrevBtn" onclick="prevRawPage()" style="padding:4px 12px;font-size:12px;">&larr; Prev</button>
+      <button class="btn secondary" id="rawNextBtn" onclick="nextRawPage()" style="padding:4px 12px;font-size:12px;">Next &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Table Container for Paginated Raw Rows -->
+  <div class="table-container" id="rawTableContainer" style="min-height:260px;">
+    <div style="text-align:center;padding:50px;color:var(--fg-subtle);">
+      <div style="display:inline-block;width:24px;height:24px;border:3px solid var(--primary-light);border-top-color:var(--primary);border-radius:50%;animation:spinSlow 0.8s linear infinite;margin-bottom:8px;"></div>
+      <div>Loading raw telemetry data...</div>
+    </div>
+  </div>
+</div>
+
 <!-- SECTION 1: BREAKDOWN MAPPING CHECK (CLIENT'S CORE CHECK) -->
 <div class="card">
   <h2>1. Match / Mismatch Within Feeder Breakdown Window</h2>
@@ -142,16 +233,13 @@
     </div>
     <div class="chart-wrapper">
       <svg class="svg-chart" viewBox="0 0 1000 {{ chart_height }}" preserveAspectRatio="xMidYMid meet">
-        <!-- Grid lines -->
         {% for y in chart_grid_y %}
         <line x1="160" y1="{{ y.pos }}" x2="980" y2="{{ y.pos }}" class="chart-grid"></line>
         <text x="150" y="{{ y.pos + 4 }}" text-anchor="end" class="chart-axis-text">{{ y.val }}</text>
         {% endfor %}
 
-        <!-- Bars per feeder -->
         {% for b in chart_feeders %}
         <text x="150" y="{{ b.y + 12 }}" text-anchor="end" class="chart-axis-text" font-weight="600">{{ b.code }}</text>
-        <!-- Stacked/Grouped Bars -->
         <rect x="160" y="{{ b.y }}" width="{{ b.m_w }}" height="8" class="chart-bar-match" rx="2">
           <title>{{ b.name }}: {{ b.match }} MATCH</title>
         </rect>
@@ -235,4 +323,242 @@
     {{ table_html_status|safe }}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==========================================================================
+// Raw Telemetry & Cross-Check Explorer Engine
+// ==========================================================================
+let currentRawKind = 'consumer_events';
+let currentRawPage = 1;
+let totalRawPages = 1;
+let rawSearchTimeout = null;
+const jobId = "{{ job_id }}";
+
+function switchRawTab(kind) {
+  currentRawKind = kind;
+  currentRawPage = 1;
+  document.querySelectorAll('.raw-tab').forEach(b => b.classList.remove('active'));
+  const activeTab = document.getElementById('tab_' + kind);
+  if (activeTab) activeTab.classList.add('active');
+
+  // Toggle filter visibility
+  const filterGroup = document.getElementById('rawResultFilterGroup');
+  if (filterGroup) {
+    filterGroup.style.display = (kind === 'breakdown_checks') ? 'flex' : 'none';
+  }
+
+  loadRawDataPage(1);
+}
+
+function debounceRawSearch() {
+  clearTimeout(rawSearchTimeout);
+  rawSearchTimeout = setTimeout(() => {
+    loadRawDataPage(1);
+  }, 280);
+}
+
+function prevRawPage() {
+  if (currentRawPage > 1) {
+    loadRawDataPage(currentRawPage - 1);
+  }
+}
+
+function nextRawPage() {
+  if (currentRawPage < totalRawPages) {
+    loadRawDataPage(currentRawPage + 1);
+  }
+}
+
+async function loadRawDataPage(page) {
+  currentRawPage = page;
+  const search = document.getElementById('rawSearchInput').value.trim();
+  const resultFilter = document.getElementById('rawResultFilter').value;
+  const container = document.getElementById('rawTableContainer');
+  const pageInfo = document.getElementById('rawPageInfo');
+  const prevBtn = document.getElementById('rawPrevBtn');
+  const nextBtn = document.getElementById('rawNextBtn');
+
+  let rawExplorerBase = "{{ url_for('raw_explorer', job_id=job_id) }}";
+  let url = `${rawExplorerBase}?kind=${encodeURIComponent(currentRawKind)}&page=${page}&limit=50`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (currentRawKind === 'breakdown_checks' && resultFilter !== 'ALL') {
+    url += `&result=${encodeURIComponent(resultFilter)}`;
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    totalRawPages = data.pages || 1;
+    pageInfo.textContent = `Page ${data.page} of ${data.pages} (${Number(data.total).toLocaleString()} rows)`;
+    prevBtn.disabled = (data.page <= 1);
+    nextBtn.disabled = (data.page >= data.pages);
+
+    if (!data.rows || data.rows.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--fg-subtle);">No matching raw telemetry records found.</div>';
+      return;
+    }
+
+    let html = '<table class="data-table"><thead><tr>';
+    data.columns.forEach(c => {
+      html += `<th>${c}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    data.rows.forEach(r => {
+      html += '<tr>';
+      r.forEach((val, idx) => {
+        let cls = '';
+        const sVal = String(val !== null ? val : '');
+        if (sVal === 'MATCH' || sVal === 'Confirmed' || sVal === 'Yes') cls = 'class="ok"';
+        else if (sVal === 'MISMATCH' || sVal === 'SUSPECT BREAKDOWN') cls = 'class="bad"';
+        else if (sVal === 'PARTIAL' || sVal === 'FAULTY METER') cls = 'class="warn"';
+        else if (sVal === 'NO METER DATA' || sVal === 'NO DTR METER') cls = 'class="info"';
+        html += `<td ${cls}>${sVal}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--bad-fg);">Error loading raw telemetry: ${err.message}</div>`;
+  }
+}
+
+function quickQuery(val) {
+  document.getElementById('crossCheckInput').value = val;
+  executeCrossCheck();
+}
+
+async function executeCrossCheck() {
+  const q = document.getElementById('crossCheckInput').value.trim();
+  const box = document.getElementById('crossCheckResult');
+  if (!q) {
+    alert('Please enter a Consumer No, Meter ID, or DTR Code to cross-check.');
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div style="text-align:center;padding:24px;color:var(--fg-muted);">Searching raw telemetry and breakdown verifications...</div>';
+
+  try {
+    let crossCheckBase = "{{ url_for('cross_check', job_id=job_id) }}";
+    const res = await fetch(`${crossCheckBase}?q=${encodeURIComponent(q)}`);
+    const d = await res.json();
+
+    if (!d.found) {
+      box.innerHTML = `<div style="color:var(--bad-fg);font-weight:600;padding:12px;">${d.error || 'No records found.'}</div>`;
+      return;
+    }
+
+    let badgeClass = d.verdict_badge === 'ok' ? 'ok' : d.verdict_badge === 'bad' ? 'bad' : 'warn';
+    let out = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px;border-bottom:1px solid var(--card-border);padding-bottom:14px;">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--fg);">${d.identifier}
+            <button type="button" class="trace-btn" data-trace-q="${escHtml(q)}" title="Show the input file, worksheet and row this came from">&#8982; trace to source</button></div>
+          <div style="font-size:13px;color:var(--fg-subtle);margin-top:3px;">
+            Recorded Feeder: <strong>${d.recorded_feeder}</strong> &bull; Recorded DTR: <strong>${d.recorded_dt}</strong>
+          </div>
+        </div>
+        <div>
+          <span class="pill ${badgeClass}" style="font-size:13px;padding:6px 14px;">${d.verdict}</span>
+        </div>
+      </div>
+    `;
+
+    if (d.reason) {
+      out += `<div style="font-size:12.5px;color:var(--fg-muted);background:var(--primary-light);padding:8px 12px;border-radius:var(--radius-sm);margin-bottom:16px;">
+        <strong>Analysis Evidence:</strong> ${d.reason}
+      </div>`;
+    }
+
+    // Breakdown Math Verification Table
+    out += `
+      <h3 style="font-size:14px;margin-bottom:6px;color:var(--primary-dark);">1. Feeder Breakdown Cross-Check Windows (&plusmn;2 min tolerance test):</h3>
+      <div class="table-container" style="max-height:220px;margin-bottom:18px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Breakdown</th>
+              <th>Status</th>
+              <th>Feeder Window</th>
+              <th>Telemetry Window</th>
+              <th>Timing Diff</th>
+              <th>Result</th>
+              <th>Exact Timing</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    if (d.breakdown_checks && d.breakdown_checks.length > 0) {
+      d.breakdown_checks.forEach(b => {
+        let rCls = (b.Result === 'MATCH') ? 'ok' : (b.Result === 'MISMATCH') ? 'bad' : 'warn';
+        let offTime = b.Consumer_off || b.DTR_off || b.Feeder_off || 'None';
+        let onTime = b.Consumer_on || b.DTR_on || b.Feeder_on || '';
+        let teleWin = offTime + (onTime ? ' &rarr; ' + onTime : '');
+        out += `
+          <tr>
+            <td><strong>${b.Breakdown}</strong></td>
+            <td><span class="pill ${b.Breakdown_status === 'Confirmed' ? 'ok' : 'bad'}">${b.Breakdown_status}</span></td>
+            <td>${b.Feeder_off || ''} &rarr; ${b.Feeder_on || ''}</td>
+            <td>${teleWin}</td>
+            <td>${b.Off_diff_min !== undefined && b.Off_diff_min !== null && b.Off_diff_min !== '' ? b.Off_diff_min + ' min' : 'N/A'}</td>
+            <td class="${rCls}"><strong>${b.Result}</strong></td>
+            <td>${b.Exact_timing_off_and_on_within_tol || 'No'}</td>
+          </tr>
+        `;
+      });
+    } else {
+      out += '<tr><td colspan="7" class="muted">No breakdown checks evaluated for this element.</td></tr>';
+    }
+    out += '</tbody></table></div>';
+
+    // Raw Telemetry Events Table
+    out += `
+      <h3 style="font-size:14px;margin-bottom:6px;color:var(--primary-dark);">2. Original Raw Outage Telemetry Fed Into Analysis (${d.raw_events_count} events):</h3>
+      <div class="table-container" style="max-height:180px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Event #</th>
+              <th>Outage Start (Off Time)</th>
+              <th>Outage Restore (On Time)</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    if (d.raw_events && d.raw_events.length > 0) {
+      d.raw_events.forEach((ev, i) => {
+        out += `
+          <tr>
+            <td>#${i + 1}</td>
+            <td><strong>${ev.start}</strong></td>
+            <td>${ev.restore || '<span class="muted">(unrestored)</span>'}</td>
+            <td>${ev.duration || 'N/A'}</td>
+          </tr>
+        `;
+      });
+    } else {
+      out += '<tr><td colspan="4" class="muted">No raw power outage events reported for this meter.</td></tr>';
+    }
+    out += '</tbody></table></div>';
+
+    box.innerHTML = out;
+  } catch (err) {
+    box.innerHTML = `<div style="color:var(--bad-fg);padding:14px;">Error performing cross-check: ${err.message}</div>`;
+  }
+}
+
+// Initialise raw explorer table on load
+document.addEventListener('DOMContentLoaded', () => {
+  loadRawDataPage(1);
+});
+</script>
 {% endblock %}
